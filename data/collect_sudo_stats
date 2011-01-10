@@ -1,0 +1,40 @@
+#!/usr/bin/env python
+
+import operator, sys
+
+def usage(exitcode):
+    print "Usage: [scriptname] file"
+    sys.exit(exitcode)
+
+def main(args):
+    if len(args) == 0:
+        usage(1)
+    input = args[0]
+    try:
+        f = open(input)
+    except IOError:
+        print "%s does not exist!" % (input)
+        usage(2)
+    freq = {}
+    for line in f:
+        fields = line.split(';')
+        command = fields[-1].strip().replace('COMMAND=', '')
+        field0 = fields[0]
+        user = field0.split()[5]
+        if user not in freq:
+            freq[user] = {}
+        if command not in freq[user]:
+            freq[user][command] = 0
+        freq[user][command] += 1
+        
+    for user in freq:
+        print "### %s ###" % (user)
+        s = sorted(freq[user].iteritems(), key=operator.itemgetter(1))
+        s.reverse()
+        for item in s:
+            command, times = item
+            print "%-60s %d" % (command, times)
+            
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

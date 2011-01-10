@@ -1,0 +1,72 @@
+#!/usr/bin/env python
+
+import datetime, re, telnetlib, time
+
+delta     = datetime.timedelta(days=1)
+yesterday = datetime.datetime.today() - delta
+year      = "%d" % ( yesterday.year )
+day       = "%02d" % ( yesterday.day )
+month     = "%02d" % ( yesterday.month )
+
+LOGDIR = "/var/log/logserver/%s/%s/%s" % (year, month, day)
+LOG    = LOGDIR + "/all.log"
+
+MAILHOST = "mail.hostprogressive.com"
+MAILPORT = 25
+
+def create_dict(lines):
+    ssh_re = re.compile('Invalid user (?P<name>[\S]*) from (?P<ip>[\S]+)')
+    breakin_attempts = {}
+    for line in lines:
+        match = ssh_re.search(line)
+        if match:
+            name = match.groupdict()['name']
+            ip = match.groupdict()['ip']
+            if ip not in breakin_attempts:
+                breakin_attempts[ip] = {}
+                breakin_attempts[ip]['aggregate'] = 0
+            if name not in breakin_attempts[ip]:
+                breakin_attempts[ip][name] = 0
+            breakin_attempts[ip][name] += 1
+            breakin_attempts[ip]['aggregate'] += 1
+
+    return breakin_attempts
+
+
+def get_ssh_lines(logfile):
+    f = open(logfile)
+    found = []
+    for line in f:
+        if "Invalid user" in line:
+            found.append(line.strip())
+    return found
+
+def send_mail(output):
+    c = telnetlib.Telnet(MAILHOST, MAILPORT)
+    c.set_debuglevel(10)
+    c.write('HELO wordnik.com\r\n')
+    time.sleep(1)
+    c.write('MAIL FROM:root@wordnik.com\r\n')
+    time.sleep(1)
+    c.write('RCPT TO:robin@wordnik.com\r\n')
+    time.sleep(1)
+    c.write('DATA\r\n')
+    time.sleep(1)
+    for line in output:
+        c.write(line + "\r\n")
+        time.sleep(1)
+    c.write('\r\n.\r\n')
+    c.expect ( ['queued as'], 10 )
+    c.close()
+
+def main():
+    ssh_lines = get_ssh_lines(LOG)
+    offenders = create_dict(ssh_lines)
+    output = []
+    for ip in offenders.keys():
+        octets = ip.split('.')
+        output.append("%s: %d attempts" % (ip,offenders[ip]['aggregate']))
+    print output
+
+if __name__ == "__main__":
+    main()

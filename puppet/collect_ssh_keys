@@ -1,0 +1,46 @@
+#!/usr/local/bin/python
+
+import os
+
+HOME = '/home'
+userkeys = {}
+for user in os.listdir(HOME):
+    keys = HOME + "/" + user + "/.ssh/authorized_keys"
+    try:
+        f = open(keys)
+        userkeys[user] = {}
+    except IOError:
+        #print "Could not open {0}".format(keys)
+        continue
+    for key in f:
+        try:
+            type, key, comment = key.split(' ', 2)
+            key = key.strip()
+            type = type.strip()
+            comment = comment.strip()
+            userkeys[user][key] = {}
+            userkeys[user][key]['comment'] = comment
+            userkeys[user][key]['type'] = type
+
+        except ValueError:
+            pass
+            #print "could not split {0}".format(key)
+    
+
+for user in userkeys:
+    f = open('{0}.pp'.format(user), 'w')
+    f.write('class users::{0} {{\n\n'.format(user))
+    f.write('    user {{ "{0}":\n'.format(user))
+    f.write('        ensure => "present",\n')
+    f.write('    }\n\n')
+    for key in userkeys[user]:
+        f.write('    ssh_authorized_key {{ "{0}":\n'.format(userkeys[user][key]['comment']))
+        f.write('        ensure => "present",\n')
+        f.write('        type   => "{0}",\n'.format(userkeys[user][key]['type']))
+        f.write('        key    => "{0}",\n'.format(key))
+        f.write('        user   => "{0}",\n'.format(user))
+        f.write('    }\n')
+        f.write('}\n')
+
+    
+
