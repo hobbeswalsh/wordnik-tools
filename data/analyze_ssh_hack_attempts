@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
-import datetime, re, telnetlib, time
+import datetime, re, sys
+from smtplib import SMTP
 
 delta     = datetime.timedelta(days=1)
 yesterday = datetime.datetime.today() - delta
@@ -42,22 +43,11 @@ def get_ssh_lines(logfile):
     return found
 
 def send_mail(output):
-    c = telnetlib.Telnet(MAILHOST, MAILPORT)
-    c.set_debuglevel(10)
-    c.write('HELO wordnik.com\r\n')
-    time.sleep(1)
-    c.write('MAIL FROM:root@wordnik.com\r\n')
-    time.sleep(1)
-    c.write('RCPT TO:robin@wordnik.com\r\n')
-    time.sleep(1)
-    c.write('DATA\r\n')
-    time.sleep(1)
+    msg = "SSH BREAKIN ATTEMPTS:\n\n"
     for line in output:
-        c.write(line + "\r\n")
-        time.sleep(1)
-    c.write('\r\n.\r\n')
-    c.expect ( ['queued as'], 10 )
-    c.close()
+        msg += line + "\n"
+    con = SMTP(MAILHOST, MAILPORT)
+    con.sendmail('root@wordnik.com', 'robin@wordnik.com', msg)
 
 def main():
     ssh_lines = get_ssh_lines(LOG)
@@ -66,7 +56,7 @@ def main():
     for ip in offenders.keys():
         octets = ip.split('.')
         output.append("%s: %d attempts" % (ip,offenders[ip]['aggregate']))
-    print output
+    send_mail(output)
 
 if __name__ == "__main__":
     main()
