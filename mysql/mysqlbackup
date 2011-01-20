@@ -1,0 +1,59 @@
+#!/bin/sh
+
+## VARIABLE INITIALIZATION ##
+
+MYSQL_USER='XXXX'
+MYSQL_PASS='XXXX'
+MYSQL_DB=$1
+
+MYSQL_LOGIN="mysql -u ${MYSQL_USER} -p${MYSQL_PASS}"
+MYSQL_DUMP="mysqldump -u ${MYSQL_USER} -p${MYSQL_PASS}"
+
+## which compression binary to use
+if [ -x /usr/bin/pbzip2 ]; then
+    COMPRESS="/usr/bin/pbzip2"
+else
+    COMPRESS="/usr/bin/bzip2"
+fi
+
+OUTPUT_DIR=/var/wordnik/backup
+NOW=$( date +%s )
+
+## FUNCTION DEFINITIONS ##
+
+stopSlave() {
+    echo "stop slave" |
+      ${MYSQL_LOGIN}
+}
+
+startSlave() {
+    echo "start slave" |
+      ${MYSQL_LOGIN}
+}
+
+dumpStatus() {
+    echo "show slave status" | \
+     ${MYSQL_LOGIN} | \
+     sed 's/\t/,/g' > \
+     ${OUTPUT_DIR}/${NOW}/slave_status.csv
+}
+
+dumpData() {
+    ${MYSQL_DUMP} ${MYSQL_DB} | \
+     ${COMPRESS} -9 > \
+     ${OUTPUT_DIR}/${NOW}/${MYSQL_DB}.sql.bz2
+}
+
+## PROGRAM STARTS HERE ##
+
+if [ -z ${MYSQL_DB} ]; then
+    echo "You must specify a database to back up!"
+    exit 1
+fi
+
+mkdir -p ${OUTPUT_DIR}/${NOW}
+
+stopSlave
+dumpStatus
+dumpData
+startSlave
