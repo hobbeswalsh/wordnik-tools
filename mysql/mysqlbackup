@@ -2,46 +2,59 @@
 
 ## VARIABLE INITIALIZATION ##
 
-MYSQL_USER='XXXX'
-MYSQL_PASS='XXXX'
+MYSQL_CONF='/etc/my.cnf'
+MYSQL_USER='XXXXX'
+MYSQL_PASS='XXXXX'
 MYSQL_DB=$1
 
 MYSQL_LOGIN="mysql -u ${MYSQL_USER} -p${MYSQL_PASS}"
 MYSQL_DUMP="mysqldump -u ${MYSQL_USER} -p${MYSQL_PASS}"
 
 ## which compression binary to use
-if [ -x /usr/bin/pbzip2 ]; then
-    COMPRESS="/usr/bin/pbzip2"
+if [ -x /usr/bin/pigz ]; then
+    COMPRESS="/usr/bin/pigz"
 else
-    COMPRESS="/usr/bin/bzip2"
+    COMPRESS="/usr/bin/gzip"
 fi
 
-OUTPUT_DIR=/var/wordnik/backup
 NOW=$( date +%s )
+OUTPUT_DIR=/var/wordnik/backup/${NOW}
 
 ## FUNCTION DEFINITIONS ##
 
 stopSlave() {
-    echo "stop slave" |
-      ${MYSQL_LOGIN}
+    echo "stop slave" | ${MYSQL_LOGIN}
+}
+
+flushTables() {
+    echo "flush tables" | ${MYSQL_LOGIN}
 }
 
 startSlave() {
-    echo "start slave" |
-      ${MYSQL_LOGIN}
+    echo "start slave" | ${MYSQL_LOGIN}
 }
 
 dumpStatus() {
-    echo "show slave status" | \
-     ${MYSQL_LOGIN} | \
-     sed 's/\t/,/g' > \
-     ${OUTPUT_DIR}/${NOW}/slave_status.csv
+    echo "show slave status \G" | \
+     ${MYSQL_LOGIN} > \
+     ${OUTPUT_DIR}/slave_status
 }
 
 dumpData() {
     ${MYSQL_DUMP} ${MYSQL_DB} | \
-     ${COMPRESS} -9 > \
-     ${OUTPUT_DIR}/${NOW}/${MYSQL_DB}.sql.bz2
+     ${COMPRESS} > \
+     ${OUTPUT_DIR}/${MYSQL_DB}.sql.gz
+}
+
+copyBinLogs() {
+    DATADIR=$( egrep '^datadir' ${MYSQL_CONF} | cut -d= -f2 )
+    RELAY_LOG=$( egrep '^relay-log' ${MYSQL_CONF} | cut -d= -f2 )
+    cp ${DATADIR}/*.info ${OUTPUT_DIR}
+    cp ${RELAY_LOG}* ${OUTPUT_DIR}
+}
+
+copyConfig() {
+    cp ${MYSQL_CONF} ${OUTPUT_DIR}
 }
 
 ## PROGRAM STARTS HERE ##
@@ -51,9 +64,12 @@ if [ -z ${MYSQL_DB} ]; then
     exit 1
 fi
 
-mkdir -p ${OUTPUT_DIR}/${NOW}
+mkdir -p ${OUTPUT_DIR}
 
 stopSlave
+flushTables
 dumpStatus
+copyConfig
+copyBinLogs
 dumpData
 startSlave
