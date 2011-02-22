@@ -1,0 +1,130 @@
+#!/usr/bin/python
+
+import json, random, sys, urllib2
+from optparse import OptionParser
+
+BASEURL   = "http://api.wordnik.com/v4"
+RESOURCES = [ "word", "words", "wordList", "wordLists", "account" ]
+TESTWORDS = [ "cat", "dog", "horse", "stethoscope" ]
+USER      = "hobbeswalsh"
+
+def fetch(url):
+    try:
+        return json.loads(urllib2.urlopen(url).read())
+    except:
+        print "Could not fetch resource {0}".format(url)
+        sys.exit(1)
+
+def freakout(url):
+    print "Could not fetch the expected resource at {0}".format(url)
+    sys.exit(1)
+
+def do_simple_tests():
+    print "Performing simple tests..."
+    for resource in RESOURCES:
+        do_help_test(resource)
+    
+def do_authenticated_tests(key):
+    print "Performing authenticated tests..."
+    do_word_tests(key, random.choice(TESTWORDS))
+    do_words_tests(key, random.choice(TESTWORDS))
+    do_account_tests(key, USER)
+
+def do_help_test(resource):
+    sys.stdout.write("Getting help on {0} resource...".format(resource))
+    sys.stdout.flush()
+    url = BASEURL + "/{0}.json".format(resource)
+    j = fetch(url)
+    if 'endPoints' not in j:
+        freakout(url)
+    sys.stdout.write("OK!\n")
+
+def do_words_tests(key, word):
+    resources = [ "randomWord", "randomWords", "search", "wordOfTheDay" ]
+    for resource in resources:
+        do_words_resource_test(key, word, resource)
+
+def do_words_resource_test(key, word, resource):
+    sys.stdout.write("Doing words/{0} test...".format(resource, word))
+    sys.stdout.flush()
+    url = BASEURL + "/words.json/{0}?api_key={1}&query={2}".format(resource, key, word)
+    j = fetch(url)
+    if type(j) == type(list()) and len(j) < 2:
+        freakout(url)
+    elif type(j) == type(dict()) and 'word' not in j:
+        freakout(url)
+    else:
+        sys.stdout.write("OK!\n")
+        
+        
+def do_word_tests(key, word):
+    do_word_test(key, word)
+    resources = [ "examples", "definitions", "frequency", "topExample",
+                  "related", "phrases", "hyphenation", "pronunciations",
+                  "audio" ]
+    for resource in resources:
+        do_word_resource_test(key, word, resource)
+
+def do_account_tests(key, user):
+    resources = [ "apiTokenStatus" ]
+    for resource in resources:
+        do_account_resource_test(key, user, resource)
+
+def do_account_resource_test(key, user, resource):
+    sys.stdout.write("Doing account/{0} test for '{1}'...".format(resource, user))
+    sys.stdout.flush()
+    url = BASEURL + "/account.json/{0}?api_key={1}".format(resource, key)
+    j = fetch(url)
+    if j['valid'] == True:
+        sys.stdout.write("OK!\n")
+    else:
+        freakout(url)
+        
+    
+def do_word_test(key, word):
+    sys.stdout.write("Doing basic word test for '{0}'...".format(word))
+    sys.stdout.flush()
+    url = BASEURL + "/word.json/{0}?api_key={1}".format(word, key)
+    j = fetch(url)
+    if 'word' in j:
+        sys.stdout.write("OK!\n")
+    else:
+        freakout(url)
+
+def do_word_resource_test(key, word, resource):
+    sys.stdout.write("Doing word/{0} test for '{1}'...".format(resource, word))
+    sys.stdout.flush()
+    url = BASEURL + "/word.json/{0}/{1}?api_key={2}".format(word, resource, key)
+    j = fetch(url)
+    if type(j) == type(dict()) and len(j.keys()) == 1:
+        freakout(url)
+    elif type(j) == type(list()) and len(j) == 0:
+        freakout(url)
+    sys.stdout.write("OK!\n")
+
+def main(args):
+    parse_args(args)
+    
+def parse_args(args):
+    
+    usage = "usage: %prog [-k|--key <API_KEY>] [-s|--simple] [-h|--help]"
+    parser = OptionParser(usage=usage)
+    parser.add_option("-k", "--key",
+                  dest="key",
+                  help="Use the specified API key")
+    #parser.add_option("-s", "--simple",
+    #              action="store_true", dest="simple",
+    #              help="Run in simple mode (no API key)")
+
+    (options, args) = parser.parse_args()
+    if options.key:
+        do_simple_tests()
+        do_authenticated_tests(options.key)
+        sys.exit(0)
+    else:
+        print "No key provided; running in simple mode..."
+        do_simple_tests()
+        sys.exit(0)    
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
