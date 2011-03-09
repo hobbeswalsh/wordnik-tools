@@ -41,6 +41,9 @@ dumpStatus() {
 }
 
 dumpData() {
+    if [ ${MYSQL_DB} == "all" ]; then
+        MYSQL_DB="--all-databases"
+    fi
     ${MYSQL_DUMP} ${MYSQL_DB} | \
      ${COMPRESS} > \
      ${OUTPUT_DIR}/${MYSQL_DB}.sql.gz
